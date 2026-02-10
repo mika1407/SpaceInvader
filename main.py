@@ -24,6 +24,14 @@ YELLOW_LASER = pygame.image.load(os.path.join("assets", "pixel_laser_yellow.png"
 # Background
 BG = pygame.transform.scale(pygame.image.load(os.path.join("assets", "background-black.png")), (WIDTH, HEIGHT))
 
+# Alustetaan mikseri (varmuuden vuoksi, vaikka font.init() on jo)
+pygame.mixer.init()
+
+# Ladataan laser-ääni
+LASER_SOUND = pygame.mixer.Sound(os.path.join("assets", "laser.wav"))
+# Voit myös säätää äänenvoimakkuutta (0.0 - 1.0)
+LASER_SOUND.set_volume(0.5)
+
 class Particle:
     def __init__(self, x, y, color):
         self.x = x
@@ -162,6 +170,15 @@ class Player(Ship):
         # Vihreä palkki (nykyinen terveys)
         health_width = bar_width * (self.health / self.max_health)
         pygame.draw.rect(window, (0, 255, 0), (bar_x, bar_y, health_width, bar_height))
+
+    def shoot(self):
+        if self.cool_down_counter == 0:
+            laser = Laser(self.x, self.y, self.laser_img)
+            self.lasers.append(laser)
+            self.cool_down_counter = 1
+            
+            # Vain pelaaja soittaa äänen
+            LASER_SOUND.play()
 
 class Enemy(Ship):
     COLOR_MAP = {
