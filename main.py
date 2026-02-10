@@ -24,6 +24,26 @@ YELLOW_LASER = pygame.image.load(os.path.join("assets", "pixel_laser_yellow.png"
 # Background
 BG = pygame.transform.scale(pygame.image.load(os.path.join("assets", "background-black.png")), (WIDTH, HEIGHT))
 
+class Particle:
+    def __init__(self, x, y, color):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.vx = random.uniform(-1, 1)  # Sivusuuntainen hajonta
+        self.vy = random.uniform(2, 4)   # Liike alaspäin aluksen takana
+        self.size = random.randint(3, 5)
+        self.life = 20    # Kuinka monta ruutua hiukkanen elää
+
+    def draw(self, window):
+        if self.size > 0:
+            pygame.draw.circle(window, self.color, (int(self.x), int(self.y)), int(self.size))
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.size -= 0.2  # Hiukkanen kutistuu
+        self.life -= 1
+
 class Laser:
     def __init__(self, x, y, img):
         self.x = x
@@ -95,6 +115,23 @@ class Player(Ship):
         self.laser_img = YELLOW_LASER
         self.mask = pygame.mask.from_surface(self.ship_img)
         self.max_health = health
+        self.particles = [] # Lista pelaajan hiukkasille
+
+    def handle_particles(self, window):
+        # Luodaan uusia hiukkasia moottorin kohdalle (aluksen pohja)
+        # x-koordinaatti on aluksen keskellä, y on aluksen alareunassa
+        px = self.x + self.get_width() / 2
+        py = self.y + self.get_height() - 10
+        
+        # Lisätään uusi hiukkanen joka ruudussa
+        self.particles.append(Particle(px, py, (255, 165, 0))) # Oranssi
+
+        # Päivitetään ja piirretään hiukkaset
+        for p in self.particles[:]:
+            p.update()
+            p.draw(window)
+            if p.life <= 0 or p.size <= 0:
+                self.particles.remove(p)
 
     def move_lasers(self, vel, objs):
         self.cooldown()
@@ -110,12 +147,21 @@ class Player(Ship):
                             self.lasers.remove(laser)
 
     def draw(self, window):
+        self.handle_particles(window) # Piirretään hiukkaset aluksen alle
         super().draw(window)
         self.healthbar(window)
 
     def healthbar(self, window):
-        pygame.draw.rect(window, (255, 0, 0), (self.x, self.y + self.ship_img.get_height() + 10, self.ship_img.get_width(), 10))
-        pygame.draw.rect(window, (0, 255, 0), (self.x, self.y + self.ship_img.get_height() + 10, self.ship_img.get_width() * (self.health/self.max_health), 10))
+        # Sijainti vasemmassa yläkulmassa, tekstin alla
+        bar_x = 10
+        bar_y = 50 # Lives-teksti on kohdassa 10, joten tämä tulee sen alle
+        bar_width = 150
+        bar_height = 15
+        # Punainen pohja (tausta)
+        pygame.draw.rect(window, (255, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+        # Vihreä palkki (nykyinen terveys)
+        health_width = bar_width * (self.health / self.max_health)
+        pygame.draw.rect(window, (0, 255, 0), (bar_x, bar_y, health_width, bar_height))
 
 class Enemy(Ship):
     COLOR_MAP = {
@@ -150,6 +196,7 @@ def main():
     lives = 5
     main_font = pygame.font.SysFont("comicsans", 30)
     lost_font = pygame.font.SysFont("comicsans", 60)
+    level_font = pygame.font.SysFont("comicsans", 70) # Uusi fontti levelille
 
     enemies = []
     wave_length = 5
@@ -186,7 +233,16 @@ def main():
         clock.tick(FPS)
         redraw_window()
 
-        if lives <= 0 or player.health <= 0:
+        # Jos aluksen terveys loppuu
+        if player.health <= 0:
+            lives -= 1        # Vähennetään elämä
+            player.health = 100 # Resetoidaan terveys uutta alusta varten
+            # Valinnainen: siirrä pelaaja takaisin keskelle
+            player.x,player.y = 350, 510
+            time.sleep(0.5) # Pieni viive ettei kuole heti uudestaan
+
+        # Jos kaikki yrityskerrat (elämät) loppuvat
+        if lives <= 0:
             lost = True
             lost_count += 1
 
@@ -196,8 +252,23 @@ def main():
             else:
                 continue
 
+        # LEVEL-PÄIVITYS JA TEKSTI
         if len(enemies) == 0:
             level += 1
+            # Näytetään Level-teksti ruudulla hetken aikaa
+            level_text = level_font.render(f"LEVEL {level}", 1, (255, 255, 255))
+            WIN.blit(level_text, (WIDTH/2 - level_text.get_width()/2, HEIGHT/2))
+            pygame.display.update()
+            time.sleep(1.5) # 1.5 sekunnin tauko ennen uutta aaltoa
+            
+            wave_length += 5
+            for i in range(wave_length):
+                enemy = Enemy(random.randrange(50, WIDTH-100), random.randrange(-1500, -100), random.choice(["red", "green", "blue"]))
+                enemies.append(enemy)
+
+        if len(enemies) == 0:
+            level += 1
+            enemy_vel += 0.5 # Viholliset liikkuvat joka tasolla hieman nopeammin
             wave_length += 5
             for i in range(wave_length):
                 enemy = Enemy(random.randrange(50, WIDTH-100), random.randrange(-1500, -100), random.choice(["red", "green", "blue"]))
